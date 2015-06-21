@@ -130,7 +130,7 @@ legend("top", cex =0.7, legend=modFit$finalModel.legend,
 
 ## Results
 
-Prediction results against the validation dataset are good, at nearly 99% accuracy.
+Prediction results against the validation dataset are good, at nearly 99% accuracy, and the OOB out of sample error error rate: 1.69% based on Randdom Forest model using Traincontrol cross-validation function.
 
 ```{r}
 # Check out our accuracy for the model using confusionMatrix
