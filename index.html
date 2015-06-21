@@ -152,7 +152,7 @@ legend(&quot;top&quot;, cex =0.7, legend=modFit$finalModel.legend,
 </div>
 <div id="results" class="section level2">
 <h2>Results</h2>
-<p>Prediction results against the validation dataset are good, at nearly 99% accuracy.</p>
+<p>Prediction results against the validation dataset are good, at nearly 99% accuracy, and the OOB out of sample error error rate: 1.69% based on Randdom Forest model using Traincontrol cross-validation function.</p>
 <pre class="r"><code># Check out our accuracy for the model using confusionMatrix
 pred &lt;- predict(modFit, newdata = validate)
 results &lt;- confusionMatrix(validate$classe, pred)
