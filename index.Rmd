@@ -1,0 +1,147 @@
+---
+title: "Machine Learning Recognition of Weight Lifting Exercises"
+author: "Jeffrey Phillips"
+date: "June 19, 2015"
+output: html_document
+---
+
+## Executive Summary
+Using activity data of 4 subjects collected using sensors during an 8 hour study, this project's aim is to
+come up with a machine learning algorithm to predict the type of activity based on captured
+accelerometer readings.  The activities are classified as sitting-down, standing-up, standing, walking,
+and sitting. More information about the study and the data may be found at this website: 
+[http://groupware.les.inf.puc-rio.br/har](http://groupware.les.inf.puc-rio.br/har).
+
+Based on data discovery and testing several different methods, it was determined that the R
+[Caret](http://caret.r-forge.r-project.org/) package would be used and model built using 
+a [Random Forest](http://cran.r-project.org/web/packages/randomForest/index.html) for the
+Classification and Regression Tree model.
+
+```{r message=FALSE}
+# Load necessary libraries
+library(caret)
+library(ggplot2)
+# Do things in parallel
+# May need to install.packages("doParallel")
+library(doParallel)
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+```
+
+## Data Collection and Cleaning
+First step is to download and read in the necessary data:
+
+```{r message=FALSE}
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+              destfile = "pml-training.csv", method ="curl")
+download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",
+              destfile = "pml-testing.csv", method ="curl")
+
+# Load data from CSV, and remove first 7 columns that are more bookkeeping info. 
+training <- read.csv("pml-training.csv", na.strings = c("NA", "", " "))[,-(0:7)]
+testing <- read.csv("pml-testing.csv", na.strings = c("NA", "", " "))[,-(0:7)]
+```
+```{r}
+dim(training)
+```
+
+During the data exploration, it was found that the first 8 columns of the data did not add
+much value to predictions.  That data was more for administration of subjects and study times.
+While reading in the data above, those first 8 columns are removed.
+
+It was also found during exploration, that there were several columns with lots of missing data, and
+others with not much variation.  Those columns were all removed from training and testing.
+
+```{r results="hide"}
+# Remove columns that are heavy on NA's
+hasData<-apply(!is.na(training),2,sum)>5000
+training<-training[, hasData]
+testing<-testing[, hasData]
+
+# Remove columns with low variance
+nzv <- nearZeroVar(training, allowParallel = TRUE)
+training[, -nzv]
+testing[, -nzv]
+```
+
+```{r}
+# Now look at the resulting data
+dim(training)
+```
+
+As you can see above, the number of columns has decreased to 53 columns which is much better compression
+of the data.
+
+The **classe** column is the attribute that provides the **outcome** that predictors are trying to determine.
+As can be seen there are 5 levels of classe data: A, B, C, D, and E.
+
+```{r}
+qplot(classe, data = training, fill = classe)
+```
+
+Lastly, the original training data was split into 60% **train** dataset, and 40% **validate** dataset.
+This will allow training and validating model, without overfitting to actual test data.
+
+```{r results = "hide"}
+set.seed(22271)
+
+# Partition data into train and validate train: 60%, validate: 40%
+inTrain <- createDataPartition(y = training$classe, p = 0.6, list = FALSE)
+train <- training[inTrain, ]
+validate <- training[-inTrain, ]
+```
+
+## Random Forest Model Fit
+
+Random Forest was chosen for model fitting.  (Note: rpart was tried early, but was removed due to
+only having a 48% accuracy rate.)
+
+```{r results="hide"}
+
+# Check accuracy using rpart - Note: was not too good at 48%, so commented
+# modFit <- train(classe ~ ., data=train, method="rpart")
+# pred <- predict(modFit, newdata=validate)
+# print(paste("Accuracy rpart:", 
+#             confusionMatrix(validate$classe, pred)$overall[1]))
+
+# Use Cross-Validation to help combat overfitting of random forest
+trainCtl <- trainControl(method = "cv", number = 10,  allowParallel = TRUE)
+modFit <- train(classe ~ ., data=train, method = "rf", ntree = 25, 
+                trainControl = trainCtl, importance = TRUE, prox=FALSE, 
+                allowParallel = TRUE)
+```
+
+Visually looking at some of the details for the model fit, there are some very good predictors and looks
+be tuned reasonably based on the number of important predictors and the Number of Trees used to train the
+model.
+
+```{r echo="false"}
+varImpPlot(modFit$finalModel, n.var = 27, main = "Top 27 Predictor Importance Measured by Random Forest")
+plot(modFit$finalModel, main = "Error Rate by Number of Trees for Model Fit")
+modFit$finalModel.legend <- if (is.null(modFit$finalModel$test$err.rate)) {
+                colnames(modFit$finalModel$err.rate)
+        } else {
+                colnames(modFit$finalModel$test$err.rate)
+        }
+legend("top", cex =0.7, legend=modFit$finalModel.legend, 
+       lty=c(1:6), col=c(1:6), horiz=T)
+
+```
+
+## Results
+
+Prediction results against the validation dataset are good, at nearly 99% accuracy.
+
+```{r}
+# Check out our accuracy for the model using confusionMatrix
+pred <- predict(modFit, newdata = validate)
+results <- confusionMatrix(validate$classe, pred)
+print(results$table)
+print(paste("Accuracy Random Forest:", results$overall[1]))
+```
+
+## Citation
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3diQxUgtz
