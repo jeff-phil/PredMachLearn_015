@@ -1,2 +1,2 @@
-# PredMachLearn_015
-Practical Machine Learning Course Project
+# Practical Machine Learning Course Project
+Practical Machine Learning Course Project 
